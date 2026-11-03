@@ -52,7 +52,8 @@ func WithPrice(in, out float64) Option {
 	return func(a *Agent) { a.priceIn, a.priceOut = in, out }
 }
 
-// WithToolLog echoes each bash command and its output to w as it runs.
+// WithToolLog echoes each bash command to w before it runs, and its
+// output after.
 // By default nothing is echoed.
 func WithToolLog(w io.Writer) Option { return func(a *Agent) { a.toolLog = w } }
 

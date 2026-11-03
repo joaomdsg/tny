@@ -27,7 +27,6 @@ func (a *Agent) newUsage() Usage {
 	return Usage{priceIn: a.priceIn, priceOut: a.priceOut}
 }
 
-// add counts one API call's usage.
 func (u *Usage) add(o apiUsage) {
 	if o.TTL.W5m+o.TTL.W1h == 0 {
 		// No TTL breakdown in the response: price writes as 5m.
@@ -66,6 +65,7 @@ func (u Usage) Saved() float64 {
 	return uncached - u.Cost()
 }
 
+// String is the one-line summary the REPL prints after each turn.
 func (u Usage) String() string {
 	hit := 0.0
 	if t := u.in + u.cacheW + u.cacheR; t > 0 {

@@ -6,6 +6,7 @@
 //	TNY_MODEL                      model name (default claude-opus-5-5)
 //	TNY_CACHE_TTL                  prompt-cache lifetime, 5m or 1h
 //	TNY_PRICE                      "in,out" dollars per million tokens
+//	NO_COLOR                       any non-empty value disables color
 //
 // Type /clear to start a fresh conversation, exit to quit.
 package main
@@ -24,12 +25,13 @@ func main() {
 		fmt.Println("QUICK_CHECK_ANTHROPIC_API_KEY not set")
 		os.Exit(1)
 	}
-	a := agent.New(key, options()...)
+	t := newTerm()
+	a := agent.New(key, options(t)...)
 
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 	for {
-		fmt.Print("you: ")
+		fmt.Print(t.style(cyan, "you: "))
 		if !in.Scan() {
 			break
 		}
@@ -40,15 +42,24 @@ func main() {
 			return
 		case "/clear":
 			a.Reset()
+			fmt.Println(t.style(dim, "  new conversation") + "\n")
 		default:
+			fmt.Println()
+			t.startSpinner()
 			reply, turn, err := a.Ask(prompt)
+			t.stopSpinner()
+			if t.wrote {
+				fmt.Println()
+			}
 			if err != nil {
-				fmt.Println("error: " + err.Error())
+				fmt.Println(t.style(red, "error: ") + err.Error())
 			} else {
-				fmt.Println("claude: " + reply)
+				fmt.Println(t.style(green, "claude:"))
+				fmt.Println(indent(reply))
 			}
 			s := a.Session()
-			fmt.Printf("[%s | session $%.4f (saved $%.4f)]\n", turn, s.Cost(), s.Saved())
+			status := fmt.Sprintf("  [%s | session $%.4f (saved $%.4f)]", turn, s.Cost(), s.Saved())
+			fmt.Print("\n" + t.style(dim, status) + "\n\n")
 		}
 	}
 	if err := in.Err(); err != nil {
@@ -57,8 +68,8 @@ func main() {
 	}
 }
 
-func options() []agent.Option {
-	opts := []agent.Option{agent.WithToolLog(os.Stdout)}
+func options(t *term) []agent.Option {
+	opts := []agent.Option{agent.WithToolLog(t)}
 	if m := os.Getenv("TNY_MODEL"); m != "" {
 		opts = append(opts, agent.WithModel(m))
 	}

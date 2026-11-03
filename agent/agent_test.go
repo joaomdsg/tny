@@ -134,6 +134,20 @@ func TestAsk_runsToolCallsAndSendsTheirOutputBack(t *testing.T) {
 	}
 }
 
+func TestAsk_indentsEveryLineOfToolOutputInTheLog(t *testing.T) {
+	t.Parallel()
+	_, url := newFakeAPI(t, bash("tu_1", "printf 'a\\nb\\n'"), text("done"))
+	var log bytes.Buffer
+
+	if _, _, err := newAgent(url, agent.WithToolLog(&log)).Ask("run it"); err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+
+	if want := "  │ a\n  │ b\n"; !strings.HasSuffix(log.String(), want) {
+		t.Errorf("tool log = %q, want it to end with %q", log.String(), want)
+	}
+}
+
 func TestAsk_putsOneCacheBreakpointOnTheLastBlock(t *testing.T) {
 	t.Parallel()
 	api, url := newFakeAPI(t, bash("tu_1", "true"), text("done"))

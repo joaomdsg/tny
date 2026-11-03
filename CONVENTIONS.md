@@ -1,8 +1,7 @@
 # Conventions
 
-Each convention gives its reasoning first, then the rule. When a rule and
-your judgment disagree, the reasoning settles it. If the reasoning doesn't
-apply, change the rule here rather than quietly breaking it.
+Each convention gives its reasoning, then the rule. If they disagree, the
+reasoning wins. If the reasoning no longer applies, edit the rule here.
 
 ## Standard Library Only
 
@@ -17,17 +16,17 @@ first, not something to do in passing.
 
 ## Deep Modules
 
-Reasoning: The `agent` package keeps a lot hidden (wire format, cache
-breakpoints, the tool loop, history rollback, pricing) behind a few
-methods: `New`, `Ask`, `Reset`, `Session`. Callers can't misuse what they
+Reasoning: The `agent` package hides the wire format, cache breakpoints,
+tool loop, history rollback, and pricing behind `New`, `Ask`, `Reset`, and
+`Session`. Callers can't misuse what they
 can't reach, and the internals can change freely.
 
 Rule:
 
 - Export as little as possible. Add new capability behind the existing
   methods or as an `Option` before adding a method.
-- `main.go` contains only the REPL and environment parsing. Anything that
-  knows about the Messages API belongs in `agent`.
+- `main` holds only the REPL, env parsing, and terminal output. Anything
+  that knows about the Messages API belongs in `agent`.
 - Don't export wire types. JSON structs for the API stay unexported, and
   content blocks pass through as `json.RawMessage` so fields tny doesn't
   know about reach the API unchanged.
@@ -38,10 +37,7 @@ Reasoning: Variadic options keep `New(apiKey)` clean for the common case
 and avoid constructors full of booleans or positional config.
 
 Rule: Optional config uses `type Option func(*Agent)` with a `With...`
-constructor per setting. Defaults live in `New`, as named constants. If
-two options ever become mutually exclusive, the second one panics: a
-conflicting configuration is a programming error, not a runtime
-condition.
+constructor per setting. Defaults are named constants in `agent.go`.
 
 ## Test Names
 
@@ -51,10 +47,10 @@ each test verifies.
 Rule: Use `Test` + PascalCase subject + underscore + camelCase behavior
 (present tense verb). The underscore separates *what* from *does what*.
 
-- ✅ `TestAsk_rollsBackAFailedTurnSoTheNextOneStartsClean`
-- ✅ `TestTruncate_neverSplitsAMultibyteCharacter`
-- ❌ `TestAsk` (vague: what about it?)
-- ❌ `Test_ask_rolls_back` (wrong casing)
+- Good: `TestAsk_rollsBackAFailedTurnSoTheNextOneStartsClean`
+- Good: `TestTruncate_neverSplitsAMultibyteCharacter`
+- Bad: `TestAsk` (vague: what about it?)
+- Bad: `Test_ask_rolls_back` (wrong casing)
 
 The name should read as a claim about behavior, not a description of what
 the test does internally.
@@ -62,7 +58,7 @@ the test does internally.
 ## Test-First
 
 Reasoning: Writing the test first forces you to define the contract before
-the implementation, and ensures every behavior has a test.
+the implementation, and gives every behavior a test.
 
 Rule: No implementation before a failing test. The sequence is always:
 write test → confirm it fails for the right reason → implement → confirm
@@ -71,11 +67,12 @@ it passes. A bug fix starts with a test that reproduces the bug.
 ## Test Scope: Outside-In Through the Public API
 
 Reasoning: Tests coupled to internals break on refactors, not on
-regressions. The public API is the contract, and that's what matters.
+regressions. The public API is the contract.
 
 Rule: Tests enter through exported symbols, in `package agent_test`. Only
-use `package agent` (internal) when a behavior can't reasonably be observed
-through `Ask`, and treat that as a last resort.
+use `package agent` (internal) when `Ask` can't reach the behavior, as a
+last resort. Today: `bash_test.go` (exit codes, truncation) and `usage_test.go`
+(pricing math).
 
 ## Fakes: Real > Fake > Mock
 
@@ -106,21 +103,20 @@ Rule:
   what was sent to the API (request bodies the fake recorded), and what
   was written to the tool log.
 - Don't assert on unexported fields or execution order.
-- For large or generated output, prefer `strings.Contains` over exact
-  equality, since exact equality is brittle when the shape can change
-  without breaking the contract.
+- For large or generated output, use `strings.Contains`: its shape can
+  change without breaking the contract.
 
 ## Assertions
 
-Reasoning: Without testify, a consistent shape for failure messages keeps
-failures readable at a glance.
+Reasoning: Without testify, one failure-message shape keeps failures
+scannable.
 
 Rule:
 
 - Use `t.Fatalf` for preconditions that guard the rest of the test (an
   unexpected error, a missing request). Use `t.Errorf` for the behavioral
   claims you want to see all of, even when one fails.
-- Format messages as `got = X, want Y`:
+- Format value comparisons as `got = X, want Y`:
   `t.Errorf("reply = %q, want %q", reply, "hello")`.
 - Compare floats with a tolerance (`math.Abs(got-want) > 1e-9`), never
   `==`.
@@ -189,11 +185,11 @@ comment. The comment must add information beyond the name. State the
 contract, the default, or the caveat.
 
 ```go
-// ✅ States the default and the trade-off
+// Good: states the default and the trade-off
 // WithCacheTTL sets the prompt-cache lifetime, "5m" (default) or "1h". 1h
 // survives long pauses, but its cache writes cost 2x input instead of 1.25x.
 
-// ❌ Restates the name
+// Bad: restates the name
 // WithModel sets the model.
 ```
 
@@ -210,11 +206,11 @@ non-obvious reasoning:
 - A deliberate choice that looks wrong but isn't.
 
 ```go
-// ✅ Explains a magic number from an external tool
+// Good: explains a magic number from an external tool
 // timeout(1) exits 124 when it had to kill the command.
 timeoutExitCode = 124
 
-// ❌ Obvious from context
+// Bad: obvious from context
 // append the message to history
 a.history = append(a.history, msg)
 ```
@@ -232,9 +228,7 @@ if got := u.Cost(); math.Abs(got-14.35) > 1e-9 {
 
 ## Errors
 
-Reasoning: Errors in Go are values. A consistent approach to when to
-return them, how to create them, and when to panic keeps the code
-predictable.
+Reasoning: One rule each for returning, creating, and panicking.
 
 ### Panic vs. Return
 
@@ -246,9 +240,8 @@ input.
 ### Creating Errors
 
 Rule: Use `fmt.Errorf` with a short lowercase prefix that names the step
-that failed (`encode request: ...`, `unreadable response: ...`). Wrap with
-`%w` only when a caller actually needs `errors.Is` / `errors.As`. Today
-the REPL only prints errors, so nothing needs to unwrap them.
+that failed (`encode request: ...`, `unreadable response: ...`). Wrap the
+cause with `%w`.
 
 ### No Custom Error Types
 
@@ -258,35 +251,36 @@ before anyone needs it is speculative abstraction.
 
 ### Failures Leave State Valid
 
-Rule: A method that fails must leave the `Agent` as it was before the
-call. `Ask` truncates history back to where it started. Never store a
+Rule: A method that fails must leave the conversation as it was. `Ask`
+truncates history back to where it started; billed usage still counts
+toward `Session`. Never store a
 partial or undecodable response, because one bad message makes every
 later request invalid.
 
 ## Package and File Organization
 
-Reasoning: Small, focused files grouped by responsibility are easier to
-navigate than one file per type or one file that does everything.
+Reasoning: Files grouped by responsibility beat one file per type or one
+file for everything.
 
 ### Packages
 
 Rule: A package owns one concept. Split a package when it has two
 unrelated responsibilities, not when it gets large. Today that is `main`
-(the REPL) and `agent` (the conversation).
+(the terminal app) and `agent` (the conversation).
 
 ### Files
 
 Rule: Group by responsibility, not by type, and name files after the
 responsibility: `api.go` (wire format and requests), `bash.go` (the tool),
-`usage.go` (tokens and cost), `agent.go` (the public surface).
+`usage.go` (tokens and cost), `agent.go` (the public surface), `main.go`
+(REPL and env vars), `term.go` (color, spinner, tool log).
 
 Split a file when it exceeds ~300 lines or contains two concerns that
 change for different reasons. Don't split preemptively.
 
 ## Markdown
 
-Reasoning: Consistent markdown style improves readability and enables
-linting.
+Reasoning: One style keeps diffs about content, not formatting.
 
 ### Line Length
 

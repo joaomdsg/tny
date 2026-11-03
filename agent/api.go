@@ -13,7 +13,7 @@ const (
 	maxTokens  = 20000
 )
 
-// message is one conversation turn. Content blocks stay raw so whatever
+// message is one entry in the conversation history. Content blocks stay raw so whatever
 // Claude sent (including fields this package doesn't know about) goes back
 // to the API exactly as received.
 type message struct {
@@ -128,9 +128,9 @@ func replyText(content []json.RawMessage) string {
 }
 
 // runTools executes every tool call in content and returns the user
-// message carrying their results. An unknown tool is answered with an
-// error result rather than dropped, since the API rejects a tool call
-// left without a result.
+// message carrying their results. An unknown tool or unreadable input gets
+// an error result rather than being dropped, since the API rejects a tool
+// call left without a result.
 func (a *Agent) runTools(content []json.RawMessage) message {
 	var results []json.RawMessage
 	for _, raw := range content {
@@ -148,7 +148,8 @@ func (a *Agent) runTools(content []json.RawMessage) message {
 		} else {
 			fmt.Fprintf(a.toolLog, "  [bash] $ %s\n", input.Command)
 			output := runBash(input.Command)
-			fmt.Fprintf(a.toolLog, "  -> %s\n", output)
+			lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+			fmt.Fprintf(a.toolLog, "  │ %s\n", strings.Join(lines, "\n  │ "))
 			result["content"] = output
 		}
 		results = append(results, mustJSON(result))
