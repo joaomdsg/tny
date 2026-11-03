@@ -10,10 +10,11 @@ import (
 
 // SGR codes for style.
 const (
-	dim   = "2"
-	red   = "1;31"
-	green = "1;32"
-	cyan  = "1;36"
+	dim    = "2"
+	red    = "1;31"
+	green  = "1;32"
+	yellow = "33"
+	cyan   = "1;36"
 )
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}

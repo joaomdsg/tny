@@ -13,7 +13,7 @@ import (
 	"github.com/joaomdsg/tny/agent"
 )
 
-// fakeAPI stands in for the Messages API: it records every request body
+// fakeAPI stands in for the model API: it records every request body
 // and answers with the next scripted response.
 type fakeAPI struct {
 	t        *testing.T
@@ -257,5 +257,23 @@ func TestSession_accumulatesUsageAcrossTurns(t *testing.T) {
 	}
 	if !strings.Contains(a.Session().String(), "| 3 calls |") {
 		t.Errorf("session usage = %q, want 3 calls", a.Session())
+	}
+}
+
+func TestUsage_reportsTokensAndCallsOfTheTurn(t *testing.T) {
+	t.Parallel()
+	_, url := newFakeAPI(t, bash("tu_1", "true"), text("done"))
+
+	_, turn, err := newAgent(url).Ask("go")
+
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	// bash reply: in 100, out 20; text reply: in 10, out 5
+	if in, out, cacheRead, cacheWrite := turn.Tokens(); in != 110 || out != 25 || cacheRead != 0 || cacheWrite != 0 {
+		t.Errorf("Tokens() = %d, %d, %d, %d, want 110, 25, 0, 0", in, out, cacheRead, cacheWrite)
+	}
+	if got := turn.Calls(); got != 2 {
+		t.Errorf("Calls() = %d, want 2", got)
 	}
 }

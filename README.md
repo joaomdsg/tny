@@ -1,7 +1,7 @@
 # tny
 
-Chat with Claude in your terminal. It runs bash for you.
-One Go binary, stdlib only.
+Chat with Claude, or any OpenAI-compatible model, in your terminal.
+It runs bash for you. One Go binary, stdlib only.
 
 **Warning:** commands run as you, unsandboxed, no confirmation.
 Use a VM or container.
@@ -23,7 +23,7 @@ you: free disk space on /?
 claude:
   265G free (44% used).
 
-  [in 12 | out 48 | ... | $0.0050 | session $0.0050]
+  1.8s · 2 calls · 120 in → 48 out · session $0.0018
 ```
 
 `/clear` → new chat. `exit` → quit.
@@ -35,6 +35,17 @@ claude:
   Set it when you change model.
 - `TNY_CACHE_TTL`: `5m` (default) or `1h`
 - `NO_COLOR`: set → no colors
+
+## Local or OpenAI-compatible models
+
+```
+export TNY_API=openai TNY_PRICE=0,0
+export TNY_ENDPOINT=http://127.0.0.1:8888/v1/chat/completions
+export TNY_MODEL=<id from /v1/models> OPENAI_API_KEY=<key, if any>
+tny
+```
+
+Works w/ llama.cpp, Unsloth, vLLM, Ollama, OpenAI.
 
 ## As a library
 

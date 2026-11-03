@@ -16,17 +16,17 @@ first, not something to do in passing.
 
 ## Deep Modules
 
-Reasoning: The `agent` package hides the wire format, cache breakpoints,
+Reasoning: The `agent` package hides the wire formats, cache breakpoints,
 tool loop, history rollback, and pricing behind `New`, `Ask`, `Reset`, and
-`Session`. Callers can't misuse what they
-can't reach, and the internals can change freely.
+`Session`. Callers can't misuse what they can't reach, and the internals
+can change freely.
 
 Rule:
 
 - Export as little as possible. Add new capability behind the existing
   methods or as an `Option` before adding a method.
 - `main` holds only the REPL, env parsing, and terminal output. Anything
-  that knows about the Messages API belongs in `agent`.
+  that knows about a model API belongs in `agent`.
 - Don't export wire types. JSON structs for the API stay unexported, and
   content blocks pass through as `json.RawMessage` so fields tny doesn't
   know about reach the API unchanged.
@@ -71,8 +71,9 @@ regressions. The public API is the contract.
 
 Rule: Tests enter through exported symbols, in `package agent_test`. Only
 use `package agent` (internal) when `Ask` can't reach the behavior, as a
-last resort. Today: `bash_test.go` (exit codes, truncation) and `usage_test.go`
-(pricing math).
+last resort. Today: `bash_test.go` (exit codes, truncation) and
+`usage_test.go` (pricing math). `status_test.go` is in `package main`,
+which has no exported API.
 
 ## Fakes: Real > Fake > Mock
 
@@ -85,10 +86,10 @@ Order of preference:
 1. **Real**: the actual implementation. Tests run real bash.
 2. **Fake**: a small working stand-in at the process boundary, such as
    the `httptest` server in `agent_test.go` that serves scripted
-   Messages API replies and records the requests.
+   model API replies (both wire formats) and records the requests.
 3. **Mock**: a double that asserts on calls. Don't use these.
 
-Rule: The only boundary to fake is the Messages API, reached through
+Rule: The only boundary to fake is the model API, reached through
 `WithEndpoint`. Never fake code you own.
 
 ## Test Behavior, Not Implementation
@@ -253,9 +254,8 @@ before anyone needs it is speculative abstraction.
 
 Rule: A method that fails must leave the conversation as it was. `Ask`
 truncates history back to where it started; billed usage still counts
-toward `Session`. Never store a
-partial or undecodable response, because one bad message makes every
-later request invalid.
+toward `Session`. Never store a partial or undecodable response, because
+one bad message makes every later request invalid.
 
 ## Package and File Organization
 
@@ -271,9 +271,10 @@ unrelated responsibilities, not when it gets large. Today that is `main`
 ### Files
 
 Rule: Group by responsibility, not by type, and name files after the
-responsibility: `api.go` (wire format and requests), `bash.go` (the tool),
-`usage.go` (tokens and cost), `agent.go` (the public surface), `main.go`
-(REPL and env vars), `term.go` (color, spinner, tool log).
+responsibility: `api.go` (wire format and requests), `openai.go` (the
+OpenAI translation), `bash.go` (the tool), `usage.go` (tokens and cost),
+`agent.go` (the public surface), `main.go` (REPL and env vars), `term.go`
+(color, spinner, tool log), `status.go` (the line after each turn).
 
 Split a file when it exceeds ~300 lines or contains two concerns that
 change for different reasons. Don't split preemptively.

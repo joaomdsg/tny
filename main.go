@@ -1,8 +1,12 @@
-// Command tny is a minimal terminal chat with Claude that can run bash.
+// Command tny is a minimal terminal chat with a model that can run bash:
+// Claude, or any OpenAI-compatible server.
 //
 // Environment:
 //
-//	QUICK_CHECK_ANTHROPIC_API_KEY  required
+//	QUICK_CHECK_ANTHROPIC_API_KEY  required, unless TNY_API=openai
+//	TNY_API                        "openai" for OpenAI-compatible servers
+//	OPENAI_API_KEY                 key for TNY_API=openai; optional
+//	TNY_ENDPOINT                   API URL, e.g. a local model server
 //	TNY_MODEL                      model name (default claude-opus-5-5)
 //	TNY_CACHE_TTL                  prompt-cache lifetime, 5m or 1h
 //	TNY_PRICE                      "in,out" dollars per million tokens
@@ -15,18 +19,27 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/joaomdsg/tny/agent"
 )
 
 func main() {
+	openAI := os.Getenv("TNY_API") == "openai"
 	key := os.Getenv("QUICK_CHECK_ANTHROPIC_API_KEY")
-	if key == "" {
+	if openAI {
+		// Local servers often need no key, so an empty one is fine.
+		key = os.Getenv("OPENAI_API_KEY")
+	} else if key == "" {
 		fmt.Println("QUICK_CHECK_ANTHROPIC_API_KEY not set")
 		os.Exit(1)
 	}
+	name := "claude"
+	if openAI {
+		name = "model"
+	}
 	t := newTerm()
-	a := agent.New(key, options(t)...)
+	a := agent.New(key, options(t, openAI)...)
 
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
@@ -46,7 +59,9 @@ func main() {
 		default:
 			fmt.Println()
 			t.startSpinner()
+			start := time.Now()
 			reply, turn, err := a.Ask(prompt)
+			elapsed := time.Since(start)
 			t.stopSpinner()
 			if t.wrote {
 				fmt.Println()
@@ -54,12 +69,10 @@ func main() {
 			if err != nil {
 				fmt.Println(t.style(red, "error: ") + err.Error())
 			} else {
-				fmt.Println(t.style(green, "claude:"))
+				fmt.Println(t.style(green, name+":"))
 				fmt.Println(indent(reply))
 			}
-			s := a.Session()
-			status := fmt.Sprintf("  [%s | session $%.4f (saved $%.4f)]", turn, s.Cost(), s.Saved())
-			fmt.Print("\n" + t.style(dim, status) + "\n\n")
+			fmt.Print("\n" + t.status(turn, a.Session(), elapsed) + "\n\n")
 		}
 	}
 	if err := in.Err(); err != nil {
@@ -68,8 +81,14 @@ func main() {
 	}
 }
 
-func options(t *term) []agent.Option {
+func options(t *term, openAI bool) []agent.Option {
 	opts := []agent.Option{agent.WithToolLog(t)}
+	if openAI {
+		opts = append(opts, agent.WithOpenAI())
+	}
+	if url := os.Getenv("TNY_ENDPOINT"); url != "" {
+		opts = append(opts, agent.WithEndpoint(url))
+	}
 	if m := os.Getenv("TNY_MODEL"); m != "" {
 		opts = append(opts, agent.WithModel(m))
 	}

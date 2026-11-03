@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -13,9 +14,9 @@ const (
 	maxTokens  = 20000
 )
 
-// message is one entry in the conversation history. Content blocks stay raw so whatever
-// Claude sent (including fields this package doesn't know about) goes back
-// to the API exactly as received.
+// message is one entry in the conversation history. Content blocks stay raw
+// so whatever the model sent (including fields this package doesn't know
+// about) goes back to the API exactly as received.
 type message struct {
 	Role    string            `json:"role"`
 	Content []json.RawMessage `json:"content"`
@@ -39,14 +40,18 @@ type response struct {
 	} `json:"error"`
 }
 
-// send posts the conversation so far and returns Claude's next message.
+// send posts the conversation so far and returns the model's next message.
 func (a *Agent) send() (response, error) {
-	body, err := json.Marshal(map[string]any{
+	payload := map[string]any{
 		"model":      a.model,
 		"max_tokens": maxTokens,
 		"messages":   withCache(a.history, a.cacheTTL),
 		"tools":      []any{bashTool},
-	})
+	}
+	if a.openAI {
+		payload = a.openAIRequest()
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return response{}, fmt.Errorf("encode request: %w", err)
 	}
@@ -55,8 +60,13 @@ func (a *Agent) send() (response, error) {
 		return response{}, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("content-type", "application/json")
-	req.Header.Set("anthropic-version", apiVersion)
-	req.Header.Set("x-api-key", a.apiKey)
+	switch {
+	case !a.openAI:
+		req.Header.Set("anthropic-version", apiVersion)
+		req.Header.Set("x-api-key", a.apiKey)
+	case a.apiKey != "":
+		req.Header.Set("authorization", "Bearer "+a.apiKey)
+	}
 
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -64,8 +74,14 @@ func (a *Agent) send() (response, error) {
 	}
 	defer resp.Body.Close()
 
+	raw, readErr := io.ReadAll(resp.Body)
 	var out response
-	decodeErr := json.NewDecoder(resp.Body).Decode(&out)
+	decodeErr := readErr
+	if decodeErr == nil && a.openAI {
+		out, decodeErr = fromOpenAI(raw)
+	} else if decodeErr == nil {
+		decodeErr = json.Unmarshal(raw, &out)
+	}
 	if resp.StatusCode != http.StatusOK || out.Error != nil {
 		msg := ""
 		if out.Error != nil {

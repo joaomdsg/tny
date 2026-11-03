@@ -58,19 +58,21 @@ func (u Usage) Cost() float64 {
 	return in*u.priceIn/1e6 + float64(u.out)*u.priceOut/1e6
 }
 
-// Saved is what the same tokens would have cost uncached, minus Cost.
-// Negative means caching cost more than it saved.
-func (u Usage) Saved() float64 {
-	uncached := float64(u.in+u.cacheW+u.cacheR)*u.priceIn/1e6 + float64(u.out)*u.priceOut/1e6
-	return uncached - u.Cost()
+// Tokens returns uncached input, output, cache-read, and cache-write tokens.
+// Total input is in + cacheRead + cacheWrite.
+func (u Usage) Tokens() (in, out, cacheRead, cacheWrite int) {
+	return u.in, u.out, u.cacheR, u.cacheW
 }
 
-// String is the one-line summary the REPL prints after each turn.
+// Calls is how many API requests were made.
+func (u Usage) Calls() int { return u.calls }
+
+// String is a plain one-line summary, for logs and library callers.
 func (u Usage) String() string {
 	hit := 0.0
 	if t := u.in + u.cacheW + u.cacheR; t > 0 {
 		hit = 100 * float64(u.cacheR) / float64(t)
 	}
-	return fmt.Sprintf("in %d | out %d | cache w %d (5m %d, 1h %d) r %d (%.0f%% hit) | %d calls | $%.4f (saved $%.4f)",
-		u.in, u.out, u.cacheW, u.w5m, u.w1h, u.cacheR, hit, u.calls, u.Cost(), u.Saved())
+	return fmt.Sprintf("in %d | out %d | cache w %d (5m %d, 1h %d) r %d (%.0f%% hit) | %d calls | $%.4f",
+		u.in, u.out, u.cacheW, u.w5m, u.w1h, u.cacheR, hit, u.calls, u.Cost())
 }

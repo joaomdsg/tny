@@ -15,10 +15,6 @@ func TestUsage_costAppliesCacheMultipliers(t *testing.T) {
 	if got := u.Cost(); math.Abs(got-14.35) > 1e-9 {
 		t.Errorf("Cost = %v, want 14.35", got)
 	}
-	// uncached: (1+2+1)*1 + 10 = 14
-	if got := u.Saved(); math.Abs(got-(14-14.35)) > 1e-9 {
-		t.Errorf("Saved = %v, want -0.35", got)
-	}
 }
 
 func TestUsage_treatsWritesWithoutATTLBreakdownAsFiveMinute(t *testing.T) {
